@@ -1,5 +1,4 @@
-const eventConstant = require("../eventConstant.js");
-const CSEvent = eventConstant.CSEvent;
+
 
 
 /**
