@@ -16,6 +16,8 @@ const CSEvent = {
     buildRtcConnection : "buildRtcConnection",
     //开始建立P2P连接
     startRtcConnection : "startRtcConnection",
+    //断开P2P连接
+    removeRtcConnection : "removeRtcConnection",
     //交换ice令牌？？test
     setDescription : "setDescription",
     //发送candidate？？test

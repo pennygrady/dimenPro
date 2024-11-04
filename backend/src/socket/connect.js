@@ -4,6 +4,7 @@ const disconnect = require("./disconnect/disconnect.js");
 const setDescription = require("./setDescription/setDescription.js");
 const sendCandidate = require("./sendCandidate/sendCandidate.js");
 const buildRtcConnection = require("./buildRtcConnection/buildRtcConnection.js");
+const removeRtcConnection = require("./removeRtcConnection/removeRtcConnection.js");
 const CSEvent = require("./eventConstant.js").CSEvent
 
 
@@ -29,7 +30,9 @@ module.exports = (io, socket, tables, dbClient) => {
     socket.on(CSEvent.sendCandidate, (data)=>{
         sendCandidate.sendCandidate(io, socket, tables, dbClient, data)
     });
-
+    socket.on(CSEvent.removeRtcConnection, (data)=>{
+        removeRtcConnection.removeRtcConnection(io, socket, tables, dbClient, data)
+    });
     socket.on('offer', (offer) => {
         socket.to(offer.socketID).emit('offer', offer);
     });

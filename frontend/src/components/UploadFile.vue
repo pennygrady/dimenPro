@@ -22,6 +22,7 @@
 
 <script>
 import { io } from 'socket.io-client';
+import RTCConnection from './rtcConnection'; // 引入 rtcConnection.js
 
 export default {
     data() {
@@ -29,8 +30,7 @@ export default {
             files: [],
             message: '',
             inputText: '',
-            peerConnection: null,
-            sendChannel: null,
+            rtcConnection: null, // 新增
             socket: null,
             username: 'YourUsername',
         };
@@ -65,17 +65,23 @@ export default {
 
             this.socket.on('startRtcConnection', (data) => {
                 console.log('开始建立RTC连接', data);
-                this.initRtcConnection(data);
+                this.rtcConnection = new RTCConnection(this.socket, this.username, this.handleMessage);
+                this.rtcConnection.initRtcConnection(data.from);
             });
-
+            this.socket.on('removeRtcConnection', (data) => {
+                console.log('开始移除RTC连接', data);
+                if (this.rtcConnection.peerConnection) {
+                    this.rtcConnection.closeConnection();
+                }
+            });
             this.socket.on('setDescription', async (data) => {
                 console.log('接收到信令', data);
-                await this.setRemoteDescription(data);
+                await this.rtcConnection.setRemoteDescription(data);
             });
             this.socket.on('sendCandidate', (data) => {
                 console.log('接收到候选者:', data);
-                if (this.peerConnection) {
-                    this.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
+                if (this.rtcConnection.peerConnection) {
+                    this.rtcConnection.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
                         .then(() => {
                             console.log('成功添加候选者');
                         })
@@ -86,77 +92,33 @@ export default {
             });
         },
         async setRemoteDescription(data) {
-            if (data.type === 'answer') {
-                let temp = new RTCSessionDescription(data.answer);
-                await this.peerConnection.setRemoteDescription(temp);
-                console.log('设置远端描述成功');
-            } else if (data.type === 'offer') {
-                await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-                const answer = await this.peerConnection.createAnswer();
-                await this.peerConnection.setLocalDescription(answer);
-                this.socket.emit('setDescription', {
-                    type: 'answer',
-                    answer: this.peerConnection.localDescription,
-                    socketID: data.from,
-                    from: this.socket.id,
-                });
-                console.log('发送应答成功');
+            await this.rtcConnection.setRemoteDescription(data);
+        },
+        handleMessage(message) {
+            if (message.command) {
+                this.handleCommand(message.command, message.payload);
+            } else {
+                this.receivedMessages.push(message.data || message);
             }
         },
-        initRtcConnection(data) {
-            const configuration = {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' } // STUN 服务器
-                ]
-            };
-            this.peerConnection = new RTCPeerConnection(configuration);
-            this.sendChannel = this.peerConnection.createDataChannel('sendDataChannel');
-
-            this.sendChannel.onopen = () => {
-                console.log('数据通道打开');
-            };
-
-            this.sendChannel.onmessage = (event) => {
-                console.log('接收到数据:', event.data);
-                this.receivedMessage = event.data; // 处理接收到的消息
-            };
-
-            this.sendChannel.onclose = () => {
-                console.log('数据通道关闭');
-            };
-            this.peerConnection.ondatachannel = (event) => {
-                const dataChannel = event.channel; // 获取接收到的数据通道
-
-                dataChannel.onopen = () => {
-                    console.log('接收到数据通道，已打开');
-                };
-
-                dataChannel.onmessage = (event) => {
-                    console.log('收到消息:', event.data);
-                };
-
-                dataChannel.onclose = () => {
-                    console.log('数据通道已关闭');
-                };
-            };
-            this.peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    this.socket.emit('sendCandidate', {
-                        candidate: event.candidate,
-                        socketID: data.from,
-                        from: this.socket.id,
-                    });
-                }
-            };
-            console.log('完成建立RTC连接');
+        handleCommand(command, payload) {
+            switch (command) {
+                case 'list current dir':
+                    console.log('处理命令: 列出当前目录', payload);
+                    break;
+                case 'enter dir':
+                    console.log('处理命令: 进入目录', payload);
+                    break;
+                default:
+                    console.warn('未知命令:', command);
+            }
         },
         sendMessage() {
-            if (this.sendChannel && this.sendChannel.readyState === 'open') {
-                this.sendChannel.send(this.inputText);
-                console.log('发送信息:', this.inputText);
+            if (this.rtcConnection) {
+                this.rtcConnection.sendMessage({ data: this.inputText });
                 this.inputText = ''; // 清空输入框
             } else {
-                console.warn('数据通道未打开', this.sendChannel.readyState);
+                console.warn('RTC连接尚未建立');
             }
         },
         disconnectSocket() {
