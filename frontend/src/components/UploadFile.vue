@@ -39,6 +39,7 @@ export default {
         this.connectSocket();
     },
     beforeUnmount() {
+        this.removeCurrentConnection();
         this.disconnectSocket();
     },
     methods: {
@@ -70,8 +71,9 @@ export default {
             });
             this.socket.on('removeRtcConnection', (data) => {
                 console.log('开始移除RTC连接', data);
-                if (this.rtcConnection.peerConnection) {
+                if (this.rtcConnection&&this.rtcConnection.peerConnection) {
                     this.rtcConnection.closeConnection();
+                    this.rtcConnection=null;
                 }
             });
             this.socket.on('setDescription', async (data) => {
@@ -93,6 +95,12 @@ export default {
         },
         async setRemoteDescription(data) {
             await this.rtcConnection.setRemoteDescription(data);
+        },
+        removeCurrentConnection() {
+            if (this.rtcConnection) {
+                this.rtcConnection.closeConnection();
+                this.rtcConnection=null;
+            }
         },
         handleMessage(message) {
             if (message.command) {

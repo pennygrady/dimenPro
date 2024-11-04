@@ -87,8 +87,9 @@ export default {
                 this.socket.emit("removeRtcConnection", { socketID: this.socketID, from: this.socket.id });
                 this.socketID = null;
             }
-            if (this.rtcConnection.peerConnection) {
+            if (this.rtcConnection) {
                 this.rtcConnection.closeConnection();
+                this.rtcConnection=null;
             }
         },
         buildRtcConnection(socketID) {
