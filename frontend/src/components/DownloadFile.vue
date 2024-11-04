@@ -28,6 +28,7 @@
 <script>
 import { io } from 'socket.io-client';
 import RTCConnection from './rtcConnection'; // 引入 rtcConnection.js
+import {pennylog} from './utils'; // 引入 rtcConnection.js
 
 export default {
     name: 'DownloadFile',
@@ -55,7 +56,7 @@ export default {
             this.socket = io('http://localhost:3000');
 
             this.socket.on('connect', () => {
-                console.log('Socket连接成功', this.socket.id);
+                pennylog('Socket连接成功', this.socket.id);
                 this.socket.username = this.username;
                 console.log('用户名已设置:', this.socket.username);
             });

@@ -1,5 +1,3 @@
-
-
 function pennylog(level, ...args) {
     const date = new Date();
     const formattedDate = date.toISOString(); // 使用 ISO 格式
