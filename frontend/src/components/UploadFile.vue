@@ -11,28 +11,23 @@
                 </li>
             </ul>
         </div>
-        <div v-if="message">{{ message }}</div>
 
-        <div>
-            <input type="text" v-model="inputText" placeholder="请输入信息" />
-            <button @click="sendMessage">提交</button>
-        </div>
     </div>
 </template>
 
 <script>
 import { io } from 'socket.io-client';
 import RTCConnection from './rtcConnection'; // 引入 rtcConnection.js
-
+import { pennylog } from './utils';
 export default {
     data() {
         return {
             files: [],
-            message: '',
             inputText: '',
             rtcConnection: null, // 新增
             socket: null,
             username: 'YourUsername',
+            socketID: null,
         };
     },
     mounted() {
@@ -46,13 +41,19 @@ export default {
         handleFileUpload(event) {
             const selectedFile = event.target.files[0];
             if (selectedFile) {
+                selectedFile.id = this.files.length;
                 this.files.push(selectedFile);
-                this.message = `${selectedFile.name} 已添加到列表。`;
             }
         },
         removeFile(index) {
+            // 从数组中删除文件
             const removedFile = this.files.splice(index, 1)[0];
             this.message = `${removedFile.name} 已从列表中删除。`;
+
+            // 更新剩余文件的 ID
+            this.files.forEach((file, idx) => {
+                file.id = idx; // 将每个文件的 ID 更新为其当前索引
+            });
         },
         connectSocket() {
             this.socket = io('http://localhost:3000');
@@ -60,20 +61,21 @@ export default {
             this.socket.on('connect', () => {
                 console.log('Socket连接成功', this.socket.id);
                 this.socket.username = this.username;
-                console.log('用户名已设置:', this.socket.username);
+                pennylog('用户名已设置:', this.socket.username);
                 this.socket.emit("joinPocket", { username: this.socket.username });
             });
 
             this.socket.on('startRtcConnection', (data) => {
                 console.log('开始建立RTC连接', data);
+                this.socketID = data.from;
                 this.rtcConnection = new RTCConnection(this.socket, this.username, this.handleMessage);
                 this.rtcConnection.initRtcConnection(data.from);
             });
             this.socket.on('removeRtcConnection', (data) => {
                 console.log('开始移除RTC连接', data);
-                if (this.rtcConnection&&this.rtcConnection.peerConnection) {
+                if (this.rtcConnection && this.rtcConnection.peerConnection) {
                     this.rtcConnection.closeConnection();
-                    this.rtcConnection=null;
+                    this.rtcConnection = null;
                 }
             });
             this.socket.on('setDescription', async (data) => {
@@ -99,7 +101,7 @@ export default {
         removeCurrentConnection() {
             if (this.rtcConnection) {
                 this.rtcConnection.closeConnection();
-                this.rtcConnection=null;
+                this.rtcConnection = null;
             }
         },
         handleMessage(message) {
@@ -111,9 +113,41 @@ export default {
         },
         handleCommand(command, payload) {
             switch (command) {
-                case 'list current dir':
+                case 'list current dir': {
                     console.log('处理命令: 列出当前目录', payload);
+                    // 在这里创建一个块级作用域
+                    const fileList = this.files.map(file => ({
+                        id: file.id, // 保留 ID
+                        name: file.name,
+                        size: file.size,
+                    }));
+                    this.rtcConnection.sendMessage({ ls: fileList }); // 发送文件列表
                     break;
+                }
+                case 'download':
+                    console.log('下载指定文件', this.files[payload].name);
+                    break;
+                case 'preview': {
+                    console.log('预览指定文件', this.files[payload].name);
+                    const videoElement = document.createElement('video');
+                    
+                    const fileURL = URL.createObjectURL(this.files[payload]);
+                    videoElement.src = fileURL;
+
+                    // 等待元数据加载
+                    videoElement.onloadedmetadata = async () => {
+                        const stream = videoElement.captureStream(); // 捕获视频流
+
+                        // 将视频轨道添加到 RTCPeerConnection
+                        stream.getTracks().forEach(track => {
+                            console.log("添加轨道:", track);
+                            this.rtcConnection.peerConnection.addTrack(track, stream);
+                        });
+                        this.rtcConnection.createoffer(this.socketID);
+                        videoElement.play();
+                    };
+                    break;
+                }
                 case 'enter dir':
                     console.log('处理命令: 进入目录', payload);
                     break;

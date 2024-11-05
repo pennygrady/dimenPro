@@ -17,18 +17,25 @@
         </div>
 
         <div>
-            <input type="text" v-model="inputText" placeholder="请输入信息" />
-            <button @click="sendMessage">提交</button>
+            <button @click="sendCommand('list current dir', 'current dir')">获取文件列表</button>
         </div>
-        <h3>收到的信息:</h3>
-        <p>{{ receivedMessage }}</p>
+
+        <h2>文件列表</h2>
+        <ul v-if="files.length">
+            <li v-for="(file, index) in files" :key="index">
+                <strong>{{ file.name }}</strong> - {{ file.size }} bytes
+                <button @click="downloadFromPocket(file)">下载</button>
+                <button v-if="isMp4(file.name)" @click="previewFromPocket(file)">预览</button>
+            </li>
+        </ul>
+        <video id="remoteVideo" controls autoplay></video>
     </div>
 </template>
 
 <script>
 import { io } from 'socket.io-client';
 import RTCConnection from './rtcConnection'; // 引入 rtcConnection.js
-import {pennylog} from './utils'; // 引入 rtcConnection.js
+import { pennylog } from './utils'; // 引入 rtcConnection.js
 
 export default {
     name: 'DownloadFile',
@@ -38,9 +45,7 @@ export default {
             sockets: [],
             socket: null,
             username: 'YourUsername',
-            inputText: '',
             rtcConnection: null, // 新增
-            receivedMessage: '',
             socketID: null,
         };
     },
@@ -89,7 +94,7 @@ export default {
             }
             if (this.rtcConnection) {
                 this.rtcConnection.closeConnection();
-                this.rtcConnection=null;
+                this.rtcConnection = null;
             }
         },
         buildRtcConnection(socketID) {
@@ -111,38 +116,58 @@ export default {
             }
         },
         handleMessage(message) {
-            if (message.command) {
-                this.handleCommand(message.command, message.payload);
+            if (message.ls) {
+                // 当接收到文件列表时，更新 files 数组
+                this.files = message.ls.map(file => ({
+                    id: file.id,    // 保留 ID
+                    name: file.name,
+                    size: file.size,
+                    type: file.type  // 可选，包含文件类型
+                }));
+                pennylog('接收到文件列表:', this.files); // 记录接收到的文件列表
+            } else if (message.data) {
+                this.handleData(message.data);
             } else {
-                this.receivedMessages.push(message.data || message);
+                pennylog(message);
             }
         },
-        handleCommand(command, payload) {
-            switch (command) {
-                case 'list current dir':
-                    console.log('处理命令: 列出当前目录', payload);
-                    break;
-                case 'enter dir':
-                    console.log('处理命令: 进入目录', payload);
-                    break;
-                default:
-                    console.warn('未知命令:', command);
-            }
+        handleData(data) {
+            pennylog(data);
         },
+
         disconnectSocket() {
             if (this.socket) {
                 this.socket.disconnect();
                 console.log('Socket连接已断开');
             }
         },
-        sendMessage() {
+        sendCommand(command, payload) {
             if (this.rtcConnection) {
-                this.rtcConnection.sendMessage({ command: 'list current dir', payload: "test files" });
-                this.inputText = ''; // 清空输入框
+                this.rtcConnection.sendMessage({ command: command, payload: payload });
             } else {
                 console.warn('RTC连接尚未建立');
             }
         },
+        downloadFromPocket(file) {
+            pennylog('not implemented yet ', file.name);
+            this.sendCommand('download', file.id);
+        },
+        previewFromPocket(file) {
+            pennylog('not implemented yet ', file.name);
+            this.sendCommand('preview', file.id);
+            const remoteVideo = document.getElementById('remoteVideo');
+
+            // 接收远程流
+            this.rtcConnection.peerConnection.ontrack = event => {
+                console.log("接收到轨道:", event.track);
+                const remoteStream = event.streams[0]
+                remoteVideo.srcObject = remoteStream; // 设置远程视频流
+            };
+        },
+        isMp4(fileName) {
+            // 检查文件名后缀是否为 .mp4
+            return fileName.toLowerCase().endsWith('.mp4');
+        }
     },
 };
 </script>
