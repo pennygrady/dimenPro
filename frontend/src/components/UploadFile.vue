@@ -18,6 +18,7 @@
 <script>
 import { io } from 'socket.io-client';
 import RTCConnection from './rtcConnection'; // 引入 rtcConnection.js
+import FileOp from './fileOp'; // 引入 rtcConnection.js
 import { pennylog } from './utils';
 export default {
     data() {
@@ -25,6 +26,7 @@ export default {
             files: [],
             inputText: '',
             rtcConnection: null, // 新增
+            fileOp:null,
             socket: null,
             username: 'YourUsername',
             socketID: null,
@@ -126,9 +128,14 @@ export default {
                 }
                 case 'download':
                     console.log('下载指定文件', this.files[payload].name);
+                    this.fileOp=new FileOp(this.rtcConnection);
+                    this.fileOp.uploadFileInChunks(this.files[payload]);
                     break;
                 case 'preview': {
                     console.log('预览指定文件', this.files[payload].name);
+                    this.fileOp=new FileOp(this.rtcConnection);
+                    this.fileOp.uploadFileInChunksForPreview(this.files[payload]);
+                    /*
                     const videoElement = document.createElement('video');
                     
                     const fileURL = URL.createObjectURL(this.files[payload]);
@@ -145,7 +152,7 @@ export default {
                         });
                         this.rtcConnection.createoffer(this.socketID);
                         videoElement.play();
-                    };
+                    };*/
                     break;
                 }
                 case 'enter dir':

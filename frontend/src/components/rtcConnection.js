@@ -122,7 +122,6 @@ export default class RTCConnection {
   sendMessage(message) {
     if (this.sendChannel && this.sendChannel.readyState === 'open') {
       this.sendChannel.send(JSON.stringify(message)); // 发送 JSON 格式的消息
-      console.log('发送信息:', message);
     } else {
       console.warn('数据通道未打开', this.sendChannel.readyState);
     }

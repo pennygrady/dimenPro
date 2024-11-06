@@ -35,7 +35,8 @@
 <script>
 import { io } from 'socket.io-client';
 import RTCConnection from './rtcConnection'; // 引入 rtcConnection.js
-import { pennylog } from './utils'; // 引入 rtcConnection.js
+import FileOp from './fileOp'; 
+import { pennylog } from './utils'; 
 
 export default {
     name: 'DownloadFile',
@@ -124,11 +125,10 @@ export default {
                     size: file.size,
                     type: file.type  // 可选，包含文件类型
                 }));
-                pennylog('接收到文件列表:', this.files); // 记录接收到的文件列表
-            } else if (message.data) {
-                this.handleData(message.data);
+            } else if (message.name) {
+                this.fileOp.handleReceivedChunk(message);
             } else {
-                pennylog(message);
+                this.fileOp.handleReceivedChunkForPreview(message);
             }
         },
         handleData(data) {
@@ -149,12 +149,13 @@ export default {
             }
         },
         downloadFromPocket(file) {
-            pennylog('not implemented yet ', file.name);
+            this.fileOp=new FileOp(this.rtcConnection);
             this.sendCommand('download', file.id);
         },
         previewFromPocket(file) {
-            pennylog('not implemented yet ', file.name);
+            this.fileOp=new FileOp(this.rtcConnection);
             this.sendCommand('preview', file.id);
+            /*
             const remoteVideo = document.getElementById('remoteVideo');
 
             // 接收远程流
@@ -162,7 +163,7 @@ export default {
                 console.log("接收到轨道:", event.track);
                 const remoteStream = event.streams[0]
                 remoteVideo.srcObject = remoteStream; // 设置远程视频流
-            };
+            };*/
         },
         isMp4(fileName) {
             // 检查文件名后缀是否为 .mp4
