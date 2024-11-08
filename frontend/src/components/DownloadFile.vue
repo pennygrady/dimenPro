@@ -26,19 +26,35 @@
                 <strong>{{ file.name }}</strong> - {{ file.size }} bytes
                 <button @click="downloadFromPocket(file)">下载</button>
                 <button v-if="isMp4(file.name)" @click="previewFromPocket(file)">预览</button>
+                <!-- 进度条 -->
+                <div v-if="file.progress !== undefined">
+                    <progress :value="file.progress" max="100"></progress>
+                    <span>{{ file.progress }}%</span>
+                </div>
             </li>
         </ul>
-        <video id="remoteVideo" controls autoplay></video>
+        <!-- 播放器模态框 -->
+        <div v-if="isPlayerVisible" class="modal">
+            <VideoPlayer
+                :videoSource="currentVideoSource"
+                :onClose="closePlayer"
+            />
+        </div>
     </div>
 </template>
 
 <script>
 import { io } from 'socket.io-client';
 import RTCConnection from './rtcConnection'; // 引入 rtcConnection.js
-import FileOp from './fileOp'; 
-import { pennylog } from './utils'; 
+import FileOp from './fileOp';
+import PreviewOp from './videoPreview';
+import { pennylog } from './utils';
+import VideoPlayer from './VideoPreview.vue';
 
 export default {
+    components: {
+        VideoPlayer
+    },
     name: 'DownloadFile',
     data() {
         return {
@@ -48,6 +64,9 @@ export default {
             username: 'YourUsername',
             rtcConnection: null, // 新增
             socketID: null,
+
+            isPlayerVisible: false, // 控制播放器的显示
+            currentVideoSource: '' // 当前视频源
         };
     },
     mounted() {
@@ -71,6 +90,8 @@ export default {
                 this.sockets = sockets.filter(socket => socket.id !== this.socket.id);
                 console.log('接收到socket信息:', this.sockets);
             });
+
+            
             this.socket.on('setDescription', async (data) => {
                 console.log('接收到信令', data);
                 await this.rtcConnection.setRemoteDescription(data);
@@ -105,7 +126,7 @@ export default {
             }
             console.log(`请求与以下socket建立连接: ${socketID}`);
             this.socket.emit("buildRtcConnection", { socketID: socketID, from: this.socket.id });
-            this.rtcConnection = new RTCConnection(this.socket, this.username, this.handleMessage);
+            this.rtcConnection = new RTCConnection(this.socket,this.socketID, this.username, this.handleMessage);
             this.rtcConnection.initRtcConnection(socketID);
             this.rtcConnection.createoffer(socketID);
         },
@@ -125,10 +146,14 @@ export default {
                     size: file.size,
                     type: file.type  // 可选，包含文件类型
                 }));
+            }else if(message.preview){
+                this.previewOp.handleReceivedChunk(message);
             } else if (message.name) {
                 this.fileOp.handleReceivedChunk(message);
-            } else {
-                this.fileOp.handleReceivedChunkForPreview(message);
+            } 
+            else
+            {
+                pennylog('not implemented yet');
             }
         },
         handleData(data) {
@@ -149,21 +174,55 @@ export default {
             }
         },
         downloadFromPocket(file) {
-            this.fileOp=new FileOp(this.rtcConnection);
+            this.fileOp = new FileOp(this.rtcConnection);
+            this.fileOp.updateProgressCallback = (progress) => {
+                this.updateFileProgress(file, progress); // 更新特定文件的进度
+            };
+            this.fileOp.hideProgressCallback = () => {
+                this.hideFileProgress(file); // 更新特定文件的进度
+            };
             this.sendCommand('download', file.id);
         },
-        previewFromPocket(file) {
-            this.fileOp=new FileOp(this.rtcConnection);
-            this.sendCommand('preview', file.id);
-            /*
-            const remoteVideo = document.getElementById('remoteVideo');
+        updateFileProgress(file, progress) {
+            const targetFile = this.files.find(f => f.id === file.id);
+            if (targetFile) {
+                targetFile.progress = progress; // 直接更新进度
+            }
+        },
+        hideFileProgress(file) {
+            const targetFile = this.files.find(f => f.name === file.name);
+            if (targetFile) {
+                targetFile.progress = undefined; // 直接设置为 undefined 来隐藏进度条
+            }
+        },
 
-            // 接收远程流
-            this.rtcConnection.peerConnection.ontrack = event => {
-                console.log("接收到轨道:", event.track);
-                const remoteStream = event.streams[0]
-                remoteVideo.srcObject = remoteStream; // 设置远程视频流
-            };*/
+
+
+        previewFromPocket(file) {
+            this.previewOp = new PreviewOp(this.rtcConnection);
+            this.previewOp.updateProgressCallback = (progress) => {
+                this.updateFileProgress(file, progress); // 更新特定文件的进度
+            };
+            this.previewOp.hideProgressCallback = () => {
+                this.hideFileProgress(file); // 更新特定文件的进度
+            };
+            this.previewOp.openPreviewCallback = () => {
+                this.openPlayer();
+            };
+            this.previewOp.setPreviewResourceCallback = (fileUrl) => {
+                this.setPreviewResource(fileUrl);
+            };
+            this.sendCommand('preview', file.id);
+        },
+        setPreviewResource(fileUrl)
+        {
+            this.currentVideoSource=fileUrl;
+        },
+        openPlayer(){
+            this.isPlayerVisible = true; 
+        },
+        closePlayer() {
+            this.isPlayerVisible = false; // 隐藏播放器
         },
         isMp4(fileName) {
             // 检查文件名后缀是否为 .mp4

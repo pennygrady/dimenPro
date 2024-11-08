@@ -1,21 +1,16 @@
 // rtcConnection.js
 export default class RTCConnection {
-  constructor(socket, username, messageHandler) {
+  constructor(socket, socketID, username, messageHandler) {
     this.socket = socket;
     this.username = username;
     this.peerConnection = null;
     this.sendChannel = null;
     this.messageHandler = messageHandler; // 新增回调
-
-
-    this.setupSocketListeners();
-  }
-
-  setupSocketListeners() {
-    console.log('初始化socketlostener');
-    
+    this.socketID = socketID;
+    this.remoteStreams = {}; // 用于存储接收到的流
 
   }
+
 
   async setRemoteDescription(data) {
     if (data.type === 'answer') {
@@ -71,6 +66,10 @@ export default class RTCConnection {
       dataChannel.onmessage = (event) => {
         this.handleMessage(event.data);
       };
+        // 设置 ontrack 事件处理程序
+        this.peerConnection.ontrack = (event) => {
+          this.handleRemoteTrack(event);
+      };
 
       dataChannel.onclose = () => {
         console.log('数据通道已关闭');
@@ -88,14 +87,49 @@ export default class RTCConnection {
     };
   }
 
-  createoffer(socketID) {
+  handleRemoteTrack(event) {
+    const track = event.track;
+    const streamId = event.streams[0].id; // 获取流的唯一 ID
+
+    // 检查流是否已存在
+    if (!this.remoteStreams[streamId]) {
+        this.remoteStreams[streamId] = event.streams[0]; // 存储流
+        console.log(`接收到新流: ${streamId}`);
+    }
+
+    // 根据轨道类型进行处理
+    if (track.kind === 'video' || track.kind === 'audio') {
+        console.log(`接收到 ${track.kind} 轨道`);
+        this.addTrackToMediaStream(track);
+    }
+}
+
+addTrackToMediaStream(track) {
+    // 创建或获取已有的 MediaStream
+    if (!this.mediaStream) {
+        this.mediaStream = new MediaStream(); // 创建新的 MediaStream
+        this.displayMediaStream(this.mediaStream); // 显示合并的流
+    }
+
+    this.mediaStream.addTrack(track); // 将轨道添加到 MediaStream
+}
+displayMediaStream(mediaStream) {
+  const videoElement = document.createElement('video');
+  videoElement.srcObject = mediaStream; // 将 MediaStream 设置为视频源
+  videoElement.autoplay = true;
+  videoElement.controls = true; // 可选，添加控制器
+  document.body.appendChild(videoElement); // 将视频添加到页面
+}
+
+
+  createoffer() {
     this.peerConnection.createOffer().then((offer) => {
       return this.peerConnection.setLocalDescription(offer);
     }).then(() => {
       this.socket.emit('setDescription', {
         type: 'offer',
         offer: this.peerConnection.localDescription,
-        socketID: socketID,
+        socketID: this.socketID,
         from: this.socket.id,
       });
       console.log('发送offer成功');
@@ -129,12 +163,12 @@ export default class RTCConnection {
 
   // 新增关闭 peerConnection 方法
   closeConnection() {
-    console.log('开始移除RTC连接',this.peerConnection);
+    console.log('开始移除RTC连接', this.peerConnection);
     if (this.sendChannel) {
       this.sendChannel.close();
       console.log('数据通道已关闭');
     }
-    
+
     if (this.peerConnection) {
       this.peerConnection.close();
       console.log('RTCPeerConnection已关闭');

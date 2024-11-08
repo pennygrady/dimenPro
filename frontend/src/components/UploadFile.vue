@@ -19,6 +19,7 @@
 import { io } from 'socket.io-client';
 import RTCConnection from './rtcConnection'; // 引入 rtcConnection.js
 import FileOp from './fileOp'; // 引入 rtcConnection.js
+import PreviewOp from './videoPreview';
 import { pennylog } from './utils';
 export default {
     data() {
@@ -27,6 +28,7 @@ export default {
             inputText: '',
             rtcConnection: null, // 新增
             fileOp:null,
+            previewOp:null,
             socket: null,
             username: 'YourUsername',
             socketID: null,
@@ -70,7 +72,7 @@ export default {
             this.socket.on('startRtcConnection', (data) => {
                 console.log('开始建立RTC连接', data);
                 this.socketID = data.from;
-                this.rtcConnection = new RTCConnection(this.socket, this.username, this.handleMessage);
+                this.rtcConnection = new RTCConnection(this.socket,this.socketID, this.username, this.handleMessage);
                 this.rtcConnection.initRtcConnection(data.from);
             });
             this.socket.on('removeRtcConnection', (data) => {
@@ -96,9 +98,6 @@ export default {
                         });
                 }
             });
-        },
-        async setRemoteDescription(data) {
-            await this.rtcConnection.setRemoteDescription(data);
         },
         removeCurrentConnection() {
             if (this.rtcConnection) {
@@ -133,8 +132,8 @@ export default {
                     break;
                 case 'preview': {
                     console.log('预览指定文件', this.files[payload].name);
-                    this.fileOp=new FileOp(this.rtcConnection);
-                    this.fileOp.uploadFileInChunksForPreview(this.files[payload]);
+                    this.previewOp=new PreviewOp(this.rtcConnection);
+                    this.previewOp.startLocalVideo(this.files[payload],this.sockeID);
                     /*
                     const videoElement = document.createElement('video');
                     
