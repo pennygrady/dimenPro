@@ -62,6 +62,16 @@ export default class VideoStreamOp {
                 URL.revokeObjectURL(fileURL); // 释放资源
                 console.log('释放 Blob URL:', fileURL);
             };
+            const audioOutputDeviceId = 'your-audio-output-device-id'; // 替换为实际的设备ID
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            console.log('切换音频输出中',devices);
+        await videoElement.setSinkId(audioOutputDeviceId)
+            .then(() => {
+                console.log(`音频输出已切换至设备: ${audioOutputDeviceId}`);
+            })
+            .catch(error => {
+                console.error('切换音频输出时出错:', error);
+            });
         } catch (error) {
             console.error('播放视频文件时出错:', error);
         }
